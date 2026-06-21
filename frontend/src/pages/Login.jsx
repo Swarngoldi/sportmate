@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignIn from '../components/GoogleSignIn';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handle = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -21,6 +23,19 @@ export default function Login() {
       setError(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleCredential = async (credential) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await googleLogin(credential);
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google sign-in failed');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -51,12 +66,31 @@ export default function Login() {
             <label className="form-label">Password</label>
             <input className="form-input" name="password" type="password" placeholder="••••••••"
               value={form.password} onChange={handle} required />
+            <div style={{ textAlign: 'right', marginTop: 8 }}>
+              <Link to="/forgot-password" style={{ color: 'var(--green)', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 8 }}>
             {loading ? 'Signing in...' : 'Sign in →'}
           </button>
         </form>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0' }}>
+          <div style={{ height: 1, background: 'var(--border)', flex: 1 }} />
+          <span style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 700 }}>OR</span>
+          <div style={{ height: 1, background: 'var(--border)', flex: 1 }} />
+        </div>
+
+        <div style={{ opacity: googleLoading ? 0.65 : 1, pointerEvents: googleLoading ? 'none' : 'auto' }}>
+          <GoogleSignIn
+            onCredential={handleGoogleCredential}
+            onError={setError}
+            text="signin_with"
+          />
+        </div>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--text2)' }}>
           No account?{' '}

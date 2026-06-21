@@ -13,8 +13,8 @@ router.put('/me', auth, async (req, res) => {
     const updates = {};
     if (name) updates.name = name;
     if (address) updates['location.address'] = address;
-    if (lat) updates['location.lat'] = lat;
-    if (lng) updates['location.lng'] = lng;
+    if (lat !== undefined) updates['location.lat'] = lat;
+    if (lng !== undefined) updates['location.lng'] = lng;
     if (sports) updates.sports = sports;
     if (preferredMatchType) updates.preferredMatchType = preferredMatchType;
     if (skillLevel) updates.skillLevel = skillLevel;
@@ -34,9 +34,16 @@ router.get('/nearby', auth, async (req, res) => {
     const myLat = req.user.location.lat;
     const myLng = req.user.location.lng;
 
-    const filter = { _id: { $ne: req.user._id } };
+    if (!myLat || !myLng) {
+      return res.status(400).json({ message: 'Set your location before finding nearby players' });
+    }
+
+    const filter = {
+      _id: { $ne: req.user._id },
+      'location.lat': { $exists: true },
+      'location.lng': { $exists: true }
+    };
     if (sport) filter.sports = sport;
-    if (availability) filter.availability = availability;
     if (matchType) filter.preferredMatchType = matchType;
 
     const users = await User.find(filter).select('-password');
@@ -44,12 +51,30 @@ router.get('/nearby', auth, async (req, res) => {
     const withDistance = users
       .map(u => {
         const dist = User.getDistance(myLat, myLng, u.location.lat, u.location.lng);
-        return { ...u.toObject(), distance: Math.round(dist * 10) / 10 };
+        const exactAvailability = !availability || u.availability === availability;
+        return {
+          ...u.toObject(),
+          distance: Math.round(dist * 10) / 10,
+          exactAvailability,
+          matchQuality: exactAvailability && dist <= 10
+            ? 'best'
+            : exactAvailability
+              ? 'nearby'
+              : 'alternate_time'
+        };
       })
-      .filter(u => u.distance <= 10)
-      .sort((a, b) => a.distance - b.distance);
+      .filter(u => u.distance <= 50)
+      .sort((a, b) => {
+        const qualityOrder = { best: 0, nearby: 1, alternate_time: 2 };
+        return qualityOrder[a.matchQuality] - qualityOrder[b.matchQuality] || a.distance - b.distance;
+      });
 
-    res.json(withDistance);
+    const exactNearby = withDistance.filter(u => u.matchQuality === 'best');
+    const exactWider = withDistance.filter(u => u.matchQuality === 'nearby');
+    const alternateTime = withDistance.filter(u => u.matchQuality === 'alternate_time');
+    const results = [...exactNearby, ...exactWider, ...alternateTime].slice(0, 20);
+
+    res.json(results);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

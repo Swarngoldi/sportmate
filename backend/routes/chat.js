@@ -12,6 +12,9 @@ router.get('/:matchId', auth, async (req, res) => {
     if (!match.players.some(p => String(p) === String(req.user._id))) {
       return res.status(403).json({ message: 'Access denied' });
     }
+    if (match.status !== 'confirmed') {
+      return res.status(403).json({ message: 'Chat opens after the match is confirmed' });
+    }
     res.json(match.messages);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -28,6 +31,9 @@ router.post('/:matchId', auth, async (req, res) => {
     if (!match) return res.status(404).json({ message: 'Match not found' });
     if (!match.players.some(p => String(p) === String(req.user._id))) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+    if (match.status !== 'confirmed') {
+      return res.status(403).json({ message: 'Chat opens after the match is confirmed' });
     }
 
     match.messages.push({ sender: req.user._id, text: text.trim() });

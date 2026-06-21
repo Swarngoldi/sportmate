@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
+import { connectRealtime, disconnectRealtime } from '../utils/realtime';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,17 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  useEffect(() => {
+    const token = localStorage.getItem('sm_token');
+    if (!user?._id || !token) {
+      disconnectRealtime();
+      return undefined;
+    }
+
+    connectRealtime(token);
+    return () => disconnectRealtime();
+  }, [user?._id]);
+
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
     localStorage.setItem('sm_token', res.data.token);
@@ -32,6 +44,22 @@ export function AuthProvider({ children }) {
 
   const register = async (data) => {
     const res = await api.post('/auth/register', data);
+    localStorage.setItem('sm_token', res.data.token);
+    localStorage.setItem('sm_user', JSON.stringify(res.data.user));
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const googleLogin = async (credential) => {
+    const res = await api.post('/auth/google', { credential });
+    localStorage.setItem('sm_token', res.data.token);
+    localStorage.setItem('sm_user', JSON.stringify(res.data.user));
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const resetPassword = async ({ email, token, password }) => {
+    const res = await api.post('/auth/reset-password', { email, token, password });
     localStorage.setItem('sm_token', res.data.token);
     localStorage.setItem('sm_user', JSON.stringify(res.data.user));
     setUser(res.data.user);
@@ -51,7 +79,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, resetPassword, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

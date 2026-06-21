@@ -24,14 +24,33 @@ export default function ConfirmMatch() {
   const confirmMatch = async () => {
     setLoading(true); setError('');
     try {
-      const res = await api.post('/matches', {
+      const payload = {
         sport,
         playerCount,
         playerIds: playerCount > 0 ? selectedPlayers.map((player) => player._id) : [],
-        courtId: court?._id,
         availability
-      });
-      navigate(`/chat/${res.data._id}`, { state: { match: res.data, players: selectedPlayers || [], court } });
+      };
+
+      if (court?._id) {
+        payload.courtId = court._id;
+      } else {
+        payload.courtPlace = {
+          name: court?.name,
+          address: court?.address,
+          location: court?.location,
+          rating: court?.rating,
+          pricePerHour: court?.pricePerHour
+        };
+      }
+
+      const res = await api.post('/matches', payload);
+      if (res.data.status === 'confirmed') {
+        navigate(`/chat/${res.data._id}`, { state: { match: res.data, players: selectedPlayers || [], court } });
+      } else {
+        navigate('/matches', {
+          state: { notice: 'Request sent. Chat will open after the player accepts.' }
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create match');
     } finally {

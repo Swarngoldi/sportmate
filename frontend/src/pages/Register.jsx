@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignIn from '../components/GoogleSignIn';
+import LocationSearch from '../components/LocationSearch';
 
 const SPORTS = ['Badminton', 'Pickleball', 'Basketball', 'Football', 'Tennis', 'Cricket', 'Table Tennis', 'Volleyball'];
 const SKILLS = ['Beginner', 'Intermediate', 'Advanced'];
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    name: '', email: '', password: '', address: '', skillLevel: 'Intermediate', availability: 'Now', preferredMatchType: 'Singles'
+    name: '', email: '', password: '', address: '', lat: '', lng: '', skillLevel: 'Intermediate', availability: 'Now', preferredMatchType: 'Singles'
   });
   const [selectedSports, setSelectedSports] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handle = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -26,6 +29,7 @@ export default function Register() {
   const submit = async e => {
     e.preventDefault();
     if (selectedSports.length === 0) { setError('Please select at least one sport'); return; }
+    if (!form.address) { setError('Please choose your location'); return; }
     setError(''); setLoading(true);
     try {
       await register({ ...form, sports: selectedSports });
@@ -34,6 +38,19 @@ export default function Register() {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleCredential = async (credential) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await googleLogin(credential);
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google sign-up failed');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -67,7 +84,15 @@ export default function Register() {
           </div>
           <div className="form-group">
             <label className="form-label">Your locality / area</label>
-            <input className="form-input" name="address" placeholder="Dharampeth, Nagpur" value={form.address} onChange={handle} required />
+            <LocationSearch
+              value={{ address: form.address, lat: form.lat, lng: form.lng }}
+              onChange={(location) => setForm(f => ({
+                ...f,
+                address: location.address,
+                lat: location.lat,
+                lng: location.lng
+              }))}
+            />
           </div>
 
           <div className="section-label">Sports I play</div>
@@ -131,6 +156,27 @@ export default function Register() {
             {loading ? 'Creating account...' : 'Start playing →'}
           </button>
         </form>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0' }}>
+          <div style={{ height: 1, background: 'var(--border)', flex: 1 }} />
+          <span style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 700 }}>OR</span>
+          <div style={{ height: 1, background: 'var(--border)', flex: 1 }} />
+        </div>
+
+        <div style={{ opacity: googleLoading ? 0.65 : 1, pointerEvents: googleLoading ? 'none' : 'auto', marginBottom: 8 }}>
+          <GoogleSignIn
+            onCredential={handleGoogleCredential}
+            onError={setError}
+            text="signup_with"
+          />
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--text2)' }}>
+          Already have an account or forgot your password?{' '}
+          <Link to="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>
+            Reset it
+          </Link>
+        </p>
       </div>
     </div>
   );

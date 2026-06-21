@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -28,6 +28,17 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
+  useEffect(() => {
+    setForm(f => ({
+      ...f,
+      name: user?.name || '',
+      location: {
+        address: user?.location?.address || '',
+        lat: user?.location?.lat || 0,
+        lng: user?.location?.lng || 0
+      }
+    }));
+  }, [user?.name, user?.location?.address, user?.location?.lat, user?.location?.lng]);
 
   const initials = user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2) || 'U';
 

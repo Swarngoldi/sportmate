@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import NavBar from '../components/NavBar';
@@ -16,23 +16,38 @@ const SPORT_EMOJIS = { Badminton:'🏸', Pickleball:'🥒', Basketball:'🏀', F
 export default function MyMatches() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { state } = useLocation();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState(state?.notice || '');
 
   useEffect(() => {
     api.get('/matches').then(res => setMatches(res.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const opponent = (match) => match.players?.find(p => p._id !== user?._id);
+  const openMatch = (match, opp) => {
+    if (match.status !== 'confirmed') {
+      setNotice('Chat opens after this match is confirmed.');
+      return;
+    }
+    navigate(`/chat/${match._id}`, { state: { match, opponent: opp, court: match.court } });
+  };
 
   return (
     <div className="app-shell">
       <div className="page-header">
         <h1>My Matches</h1>
-        <p>{matches.length} total · tap to open chat</p>
+        <p>{matches.length} total · confirmed matches open chat</p>
       </div>
 
       <div className="scroll-content">
+        {notice && (
+          <div style={{ background: 'var(--green-light)', color: 'var(--green-dark)', padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13 }}>
+            {notice}
+          </div>
+        )}
+
         {loading && <div className="loading"><div className="spinner"></div></div>}
 
         {!loading && matches.length === 0 && (
@@ -50,7 +65,7 @@ export default function MyMatches() {
           return (
             <div
               key={match._id}
-              onClick={() => navigate(`/chat/${match._id}`, { state: { match, opponent: opp, court: match.court } })}
+              onClick={() => openMatch(match, opp)}
               style={{
                 background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 16,
                 padding: 14, marginBottom: 10, cursor: 'pointer', transition: '0.15s'
@@ -78,6 +93,11 @@ export default function MyMatches() {
               <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text2)' }}>
                 {new Date(match.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </div>
+              {match.status !== 'confirmed' && (
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text2)' }}>
+                  Waiting for confirmation before chat opens.
+                </div>
+              )}
             </div>
           );
         })}

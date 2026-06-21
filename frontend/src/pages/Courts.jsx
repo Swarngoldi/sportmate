@@ -38,6 +38,36 @@ function getMidpoint(coords) {
   return { lat, lng };
 }
 
+function getDistanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function enrichCourtRanking(item, participantCoords, requesterCoord, midpoint) {
+  const courtLat = item.location?.lat ?? item.lat;
+  const courtLng = item.location?.lng ?? item.lng;
+  const distanceFromMidpoint = getDistanceKm(midpoint.lat, midpoint.lng, courtLat, courtLng);
+  const distanceFromYou = requesterCoord
+    ? getDistanceKm(requesterCoord.lat, requesterCoord.lng, courtLat, courtLng)
+    : distanceFromMidpoint;
+  const participantDistances = participantCoords.map((coord) => getDistanceKm(coord.lat, coord.lng, courtLat, courtLng));
+  const distanceFromFarthestPlayer = Math.max(...participantDistances);
+  const averageParticipantDistance = participantDistances.reduce((sum, distance) => sum + distance, 0) / participantDistances.length;
+  const rankingScore = (distanceFromFarthestPlayer * 0.55) + (distanceFromMidpoint * 0.25) + (distanceFromYou * 0.20);
+
+  return {
+    ...item,
+    distanceFromMidpoint: Math.round(distanceFromMidpoint * 10) / 10,
+    distanceFromYou: Math.round(distanceFromYou * 10) / 10,
+    distanceFromFarthestPlayer: Math.round(distanceFromFarthestPlayer * 10) / 10,
+    averageParticipantDistance: Math.round(averageParticipantDistance * 10) / 10,
+    rankingScore: Math.round(rankingScore * 10) / 10
+  };
+}
+
 export default function Courts() {
   const navigate = useNavigate();
   const { state } = useLocation();
@@ -54,6 +84,7 @@ export default function Courts() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const courtMarkersRef = useRef([]);
   const placesMarkersRef = useRef([]);
 
   useEffect(() => {
@@ -92,25 +123,23 @@ export default function Courts() {
     loadGoogleMapsScript(GOOGLE_MAPS_KEY)
       .then((google) => {
         const coords = [];
-        if (playerCount === 0) {
-          if (user?.location?.lat && user.location?.lng) {
-            coords.push({ lat: user.location.lat, lng: user.location.lng });
-          }
-        } else if (selectedPlayers?.length) {
+        if (user?.location?.lat && user.location?.lng) {
+          coords.push({ lat: user.location.lat, lng: user.location.lng });
+        }
+        if (playerCount > 0 && selectedPlayers?.length) {
           selectedPlayers.forEach((player) => {
             if (player.location?.lat && player.location?.lng) {
               coords.push({ lat: player.location.lat, lng: player.location.lng });
             }
           });
         }
-        if (coords.length === 0 && user?.location?.lat && user.location?.lng) {
-          coords.push({ lat: user.location.lat, lng: user.location.lng });
-        }
         if (coords.length === 0 && courts.length > 0) {
           coords.push({ lat: courts[0].lat, lng: courts[0].lng });
         }
 
-        const center = getMidpoint(coords);
+        const bounds = new google.maps.LatLngBounds();
+        coords.forEach((coord) => bounds.extend(coord));
+        const center = coords.length === 1 ? coords[0] : bounds.getCenter().toJSON();
         console.log('Map center coordinates:', center);
         console.log('User location:', user?.location);
         console.log('Selected players:', selectedPlayers);
@@ -122,13 +151,20 @@ export default function Courts() {
             disableDefaultUI: true,
             gestureHandling: 'greedy'
           });
-        } else {
+        }
+
+        if (coords.length === 1) {
           mapInstanceRef.current.setCenter(center);
+          mapInstanceRef.current.setZoom(13);
+        } else {
+          mapInstanceRef.current.fitBounds(bounds, 60);
         }
         setMapReady(true);
 
         markersRef.current.forEach((marker) => marker.setMap(null));
         markersRef.current = [];
+        courtMarkersRef.current.forEach((marker) => marker.setMap(null));
+        courtMarkersRef.current = [];
         placesMarkersRef.current.forEach((marker) => marker.setMap(null));
         placesMarkersRef.current = [];
 
@@ -156,20 +192,10 @@ export default function Courts() {
           });
         }
 
-        const midpoint = getMidpoint(coords);
-        markersRef.current.push(new google.maps.Marker({
-          position: midpoint,
-          map: mapInstanceRef.current,
-          title: 'Midpoint',
-          icon: {
-            path: 'M12.5,2C8.36,2,5,5.36,5,9.5C5,15.5,12.5,22,12.5,22C12.5,22,20,15.5,20,9.5C20,5.36,16.64,2,12.5,2Z',
-            fillColor: '#F59E0B',
-            fillOpacity: 1,
-            strokeColor: '#B45309',
-            strokeWeight: 2,
-            scale: 1
-          }
-        }));
+        const googleSearchLocation = coords.length === 1 ? coords[0] : bounds.getCenter().toJSON();
+        const requesterCoord = user?.location?.lat && user.location?.lng
+          ? { lat: user.location.lat, lng: user.location.lng }
+          : coords[0];
 
         courts.forEach((court, index) => {
           const marker = new google.maps.Marker({
@@ -199,18 +225,18 @@ export default function Courts() {
             infoWindow.open(mapInstanceRef.current, marker);
           });
 
-          markersRef.current.push(marker);
+          courtMarkersRef.current.push(marker);
         });
 
         setPlacesResults([]);
         if (google.maps.places && mapInstanceRef.current) {
-          console.log('Places API available, searching around:', midpoint, 'for sport:', sport);
+          console.log('Places API available, searching around:', googleSearchLocation, 'for sport:', sport);
           const service = new google.maps.places.PlacesService(mapInstanceRef.current);
           service.textSearch(
             {
               query: `${sport} court`,
-              location: midpoint,
-              radius: 5000
+              location: requesterCoord || googleSearchLocation,
+              radius: 12000
             },
             (results, status) => {
               console.log('Places API response:', status, results?.length || 0, 'results');
@@ -224,7 +250,7 @@ export default function Courts() {
                 setPlacesError('');
                 const cleanedPlaces = results.slice(0, 8).map((place) => {
                   if (!place.geometry?.location) return null;
-                  return {
+                  const basicPlace = {
                     placeId: place.place_id,
                     name: place.name,
                     address: place.formatted_address || place.vicinity || '',
@@ -234,8 +260,13 @@ export default function Courts() {
                       lng: place.geometry.location.lng()
                     }
                   };
-                }).filter(Boolean);
+                  return enrichCourtRanking(basicPlace, coords, requesterCoord, googleSearchLocation);
+                }).filter(Boolean)
+                  .sort((a, b) => a.rankingScore - b.rankingScore || a.distanceFromYou - b.distanceFromYou);
                 setPlacesResults(cleanedPlaces);
+                if (cleanedPlaces.length > 0) {
+                  setSelected(cleanedPlaces[0]);
+                }
                 console.log('Adding', cleanedPlaces.length, 'place markers');
                 cleanedPlaces.forEach((place) => {
                   const placeMarker = new google.maps.Marker({
@@ -252,6 +283,8 @@ export default function Courts() {
                     }
                   });
                   placeMarker.addListener('click', () => {
+                    setSelected(place);
+                    mapInstanceRef.current.panTo(place.location);
                     infoWindow.setContent(`
                       <div style="font-family: Arial, sans-serif; font-size: 14px;">
                         <strong>${place.name}</strong><br />
@@ -288,6 +321,8 @@ export default function Courts() {
     return '★'.repeat(full) + '☆'.repeat(5 - full);
   };
 
+  const isGooglePlace = (item) => Boolean(item?.placeId);
+
   return (
     <div className="app-shell">
       <div className="page-header">
@@ -305,7 +340,7 @@ export default function Courts() {
             display: 'grid', gap: 4, width: 180
           }}>
             <div style={{ fontWeight: 700 }}>{mapReady ? 'Live court map' : 'Loading court map...'}</div>
-            <div>{courts.length} courts shown</div>
+            <div>{placesResults.length > 0 ? `${placesResults.length} Google courts` : `${courts.length} courts shown`}</div>
             <div>{playerCount === 0 ? 'Solo map view' : `Group of ${playerCount}`}</div>
           </div>
           <div style={{
@@ -314,7 +349,6 @@ export default function Courts() {
             background: 'rgba(255,255,255,0.95)', borderRadius: 16, fontSize: 12, color: '#111'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: 9999, background: '#34D399', display: 'inline-block' }} /> You</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: 9999, background: '#F59E0B', display: 'inline-block' }} /> Midpoint</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: 9999, background: '#FBBF24', display: 'inline-block' }} /> Court</div>
           </div>
         </div>
@@ -335,11 +369,33 @@ export default function Courts() {
           <div style={{ marginBottom: 16 }}>
             <div className="section-label">Nearby courts from Google</div>
             {placesResults.map((place) => (
-              <div key={place.placeId} style={{ background: 'var(--bg)', borderRadius: 16, padding: 14, marginBottom: 10, border: '1px solid var(--border)' }}>
+              <div
+                key={place.placeId}
+                onClick={() => {
+                  setSelected(place);
+                  if (mapInstanceRef.current) {
+                    mapInstanceRef.current.panTo(place.location);
+                    mapInstanceRef.current.setZoom(15);
+                  }
+                }}
+                style={{
+                  background: 'var(--bg)',
+                  borderRadius: 16,
+                  padding: 14,
+                  marginBottom: 10,
+                  border: selected?.placeId === place.placeId ? '2px solid var(--green)' : '1px solid var(--border)',
+                  cursor: 'pointer',
+                  transition: '0.15s'
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15 }}>{place.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{place.address}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>
+                      {place.distanceFromYou} km from you
+                      {playerCount > 0 ? ` - ${place.distanceFromFarthestPlayer} km max player distance` : ''}
+                    </div>
                     <div style={{ fontSize: 13, color: 'var(--amber)', marginTop: 4 }}>{place.rating ? `${'★'.repeat(Math.round(place.rating))}${'☆'.repeat(5 - Math.round(place.rating))}` : 'No rating'}</div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
@@ -360,6 +416,10 @@ export default function Courts() {
             <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700 }}>No courts found</p>
             <p style={{ fontSize: 13, marginTop: 8 }}>Run the seed script to add courts to your database.</p>
           </div>
+        )}
+
+        {courts.length > 0 && placesResults.length > 0 && (
+          <div className="section-label">Saved courts ranked for your group</div>
         )}
 
         {courts.map((court, i) => (
@@ -387,7 +447,9 @@ export default function Courts() {
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
               {i === 0 && <span className="chip chip-green">{playerCount === 0 ? 'Closest to you' : 'Closest to group'}</span>}
+              {court.distanceFromYou !== undefined && <span className="chip chip-green">{court.distanceFromYou} km from you</span>}
               {playerCount > 0 && <span className="chip chip-amber">{court.distanceFromMidpoint} km from midpoint</span>}
+              {playerCount > 0 && court.distanceFromFarthestPlayer !== undefined && <span className="chip chip-purple">{court.distanceFromFarthestPlayer} km max player distance</span>}
               {court.sports?.map(s => <span key={s} className="chip" style={{ background: 'var(--bg2)', color: 'var(--text2)' }}>{s}</span>)}
             </div>
           </div>

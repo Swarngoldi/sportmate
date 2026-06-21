@@ -59,7 +59,7 @@ A modern, location-based sports matchmaking app that connects players in real-ti
 
    **Backend (.env file):**
    ```env
-   MONGODB_URI=mongodb://localhost:27017/sportmate
+   MONGO_URI=mongodb://localhost:27017/sportmate
    JWT_SECRET=your_super_secret_jwt_key_here
    PORT=5000
    ```
@@ -301,12 +301,56 @@ Frontend runs at http://localhost:5173
 
 ---
 
+## Auth, Email, and Notification Reliability
+
+Backend `.env` values for the new features:
+
+```env
+MONGO_URI=mongodb://localhost:27017/sportmate
+JWT_SECRET=your_super_secret_jwt_key_here
+PORT=5000
+FRONTEND_URL=http://localhost:5173
+GOOGLE_CLIENT_ID=your_google_oauth_client_id.apps.googleusercontent.com
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_password
+MAIL_FROM=SportMate <no-reply@sportmate.com>
+NOTIFICATION_WORKER_INTERVAL_MS=5000
+CORS_ORIGIN=http://localhost:5173
+
+# Optional high-scale notification worker mode.
+# When REDIS_URL is present, notification jobs are executed through BullMQ.
+REDIS_URL=redis://localhost:6379
+NOTIFICATION_QUEUE_NAME=sportmate-notifications
+NOTIFICATION_WORKER_CONCURRENCY=10
+```
+
+Frontend `.env` values:
+
+```env
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id.apps.googleusercontent.com
+VITE_SOCKET_URL=http://localhost:5000
+```
+
+Notifications use Socket.IO for realtime browser delivery. The browser opens an authenticated websocket with the same JWT used for API calls, then receives `notification:new` and unread-count updates immediately.
+
+Notification jobs are still saved in MongoDB for durability and idempotency. For local development without Redis, the app runs a Mongo-backed worker fallback. For production scale, set `REDIS_URL`; BullMQ will process notification jobs with configurable concurrency while MongoDB remains the source of truth for delivery state, retries, and dead-letter records.
+
+Forgot-password emails require SMTP settings. Reset links are never returned to the browser; they are only sent to the account owner's email address. In local development without SMTP, the backend logs email dry-runs to the server console, but real users need SMTP configured.
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | What it does |
 |--------|----------|-------------|
 | POST | /api/auth/register | Create account |
 | POST | /api/auth/login | Login |
+| POST | /api/auth/google | Login or sign up with Google |
+| POST | /api/auth/forgot-password | Send password reset email |
+| POST | /api/auth/reset-password | Reset password with token |
 | GET | /api/users/me | My profile |
 | PUT | /api/users/me | Update profile |
 | GET | /api/users/nearby?sport=Badminton&availability=Now | Find nearby players |
@@ -315,6 +359,8 @@ Frontend runs at http://localhost:5173
 | GET | /api/matches | My matches |
 | GET | /api/matches/:id | Single match |
 | PUT | /api/matches/:id/confirm | Confirm match |
+| GET | /api/notifications | My in-app notifications |
+| GET | /api/notifications/delivery-status | My recent notification delivery jobs |
 | GET | /api/chat/:matchId | Get messages |
 | POST | /api/chat/:matchId | Send message |
 

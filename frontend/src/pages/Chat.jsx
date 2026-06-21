@@ -12,24 +12,52 @@ export default function Chat() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [matchData, setMatchData] = useState(state?.match || null);
+  const [error, setError] = useState('');
   const bottomRef = useRef(null);
 
   const opponent = state?.opponent;
   const court = state?.court;
 
+  const loadMessages = async ({ silent = false } = {}) => {
+    try {
+      const res = await api.get(`/chat/${matchId}`);
+      setMessages(res.data);
+      setError('');
+    } catch (err) {
+      if (!silent) setError(err.response?.data?.message || 'Chat is not available yet');
+    }
+  };
+
   useEffect(() => {
-    api.get(`/chat/${matchId}`).then(res => setMessages(res.data)).catch(() => {});
+    loadMessages();
     if (!matchData) {
-      api.get(`/matches/${matchId}`).then(res => setMatchData(res.data)).catch(() => {});
+      api.get(`/matches/${matchId}`)
+        .then(res => {
+          setMatchData(res.data);
+          if (res.data.status !== 'confirmed') setError('Chat opens after the match is confirmed');
+        })
+        .catch(() => {});
+    } else if (matchData.status !== 'confirmed') {
+      setError('Chat opens after the match is confirmed');
     }
   }, [matchId]);
+
+  useEffect(() => {
+    if (matchData?.status !== 'confirmed') return;
+
+    const intervalId = setInterval(() => {
+      loadMessages({ silent: true });
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [matchId, matchData?.status]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const send = async () => {
-    if (!text.trim() || sending) return;
+    if (!text.trim() || sending || matchData?.status !== 'confirmed') return;
     setSending(true);
     try {
       const res = await api.post(`/chat/${matchId}`, { text });
@@ -69,10 +97,18 @@ export default function Chat() {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        {error && (
+          <div style={{ background: '#FCEBEB', color: '#A32D2D', padding: '12px 14px', borderRadius: 12, marginBottom: 16, fontSize: 13, lineHeight: 1.5 }}>
+            {error}
+          </div>
+        )}
+
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text2)' }}>
             <p style={{ fontSize: 32 }}>👋</p>
-            <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15, marginTop: 8 }}>Match confirmed!</p>
+            <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15, marginTop: 8 }}>
+              {matchData?.status === 'confirmed' ? 'Match confirmed!' : 'Waiting for confirmation'}
+            </p>
             <p style={{ fontSize: 13, marginTop: 6, lineHeight: 1.6 }}>Say hi to {opponentName?.split(' ')[0]} and coordinate your game.</p>
           </div>
         )}
@@ -110,10 +146,11 @@ export default function Chat() {
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && send()}
+          disabled={matchData?.status !== 'confirmed'}
         />
         <button
           onClick={send}
-          disabled={sending || !text.trim()}
+          disabled={sending || !text.trim() || matchData?.status !== 'confirmed'}
           style={{
             width: 44, height: 44, borderRadius: '50%', border: 'none',
             background: text.trim() ? 'var(--green)' : 'var(--bg2)',

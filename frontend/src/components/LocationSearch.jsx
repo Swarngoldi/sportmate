@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatPlaceLabel, getCurrentLocationWithAddress } from '../utils/location';
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
@@ -11,6 +12,10 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
   const autocompleteServiceRef = useRef(null);
   const sessionTokenRef = useRef(null);
   const placesServiceRef = useRef(null);
+
+  useEffect(() => {
+    setInput(value?.address || '');
+  }, [value?.address]);
 
   useEffect(() => {
     if (!GOOGLE_MAPS_KEY) return;
@@ -29,7 +34,15 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
       return;
     }
 
+    const existingScript = document.getElementById('google-maps-script');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => createServices(), { once: true });
+      existingScript.addEventListener('error', () => setPlacesLoaded(false), { once: true });
+      return;
+    }
+
     const script = document.createElement('script');
+    script.id = 'google-maps-script';
     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`;
     script.async = true;
     script.defer = true;
@@ -60,7 +73,6 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
       {
         input: val,
         sessionToken: sessionTokenRef.current,
-        types: ['geocode'],
         componentRestrictions: { country: 'IN' }
       },
       (predictions, status) => {
@@ -86,7 +98,7 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
         if (status === window.google.maps.places.PlacesServiceStatus.OK && details.geometry?.location) {
           const lat = details.geometry.location.lat();
           const lng = details.geometry.location.lng();
-          const address = details.formatted_address;
+          const address = formatPlaceLabel(details);
 
           setInput(address);
           setSuggestions([]);
@@ -97,29 +109,19 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
     );
   };
 
-  const useCurrentLocation = () => {
+  const useCurrentLocation = async () => {
     setLocating(true);
-    if (!navigator.geolocation) {
-      alert('Geolocation not supported');
+    try {
+      const location = await getCurrentLocationWithAddress();
+      setInput(location.address);
+      setSuggestions([]);
+      onChange(location);
+      onLocationUpdate?.(location.lat, location.lng, location.address);
+    } catch (error) {
+      alert('Could not get location: ' + error.message);
+    } finally {
       setLocating(false);
-      return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setInput('📍 Current location');
-        setSuggestions([]);
-        onChange({ address: '📍 Current location', lat: latitude, lng: longitude });
-        onLocationUpdate?.(latitude, longitude);
-        setLocating(false);
-      },
-      (error) => {
-        alert('Could not get location: ' + error.message);
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 20000 }
-    );
   };
 
   return (
@@ -163,39 +165,49 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
           </button>
         </div>
 
-        {suggestions.length > 0 && (
+        {(loading || suggestions.length > 0) && (
           <div
             style={{
               position: 'absolute',
               top: '100%',
               left: 0,
               right: 0,
-              background: 'var(--bg)',
+              background: '#ffffff',
               borderRadius: 12,
-              border: '1px solid var(--border)',
+              border: '1px solid #D1D5DB',
               marginTop: 8,
               zIndex: 999,
               boxShadow: '0 10px 30px rgba(0,0,0,0.1)'
             }}
           >
-            {suggestions.map((place, idx) => (
-              <div
-                key={idx}
-                onClick={() => selectSuggestion(place)}
-                style={{
-                  padding: '12px 14px',
-                  borderBottom: idx < suggestions.length - 1 ? '1px solid var(--border)' : 'none',
-                  cursor: 'pointer',
-                  transition: '0.1s',
-                  fontSize: 13
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <div style={{ fontWeight: 500, color: 'var(--text)' }}>{place.main_text}</div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>{place.secondary_text}</div>
-              </div>
-            ))}
+            {loading ? (
+              <div style={{ padding: '12px 14px', fontSize: 13, color: '#111' }}>Loading suggestions…</div>
+            ) : (
+              suggestions.map((place, idx) => {
+                const title = place.main_text || place.description || place.structured_formatting?.main_text || 'Location';
+                const subtitle = place.secondary_text || place.structured_formatting?.secondary_text || '';
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => selectSuggestion(place)}
+                    style={{
+                      padding: '12px 14px',
+                      borderBottom: idx < suggestions.length - 1 ? '1px solid #E5E7EB' : 'none',
+                      cursor: 'pointer',
+                      transition: '0.1s',
+                      fontSize: 13,
+                      color: '#111',
+                      background: '#fff'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F3F4F6')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+                  >
+                    <div style={{ fontWeight: 500, color: '#111' }}>{title}</div>
+                    {subtitle && <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{subtitle}</div>}
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </div>

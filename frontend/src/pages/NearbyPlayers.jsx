@@ -33,6 +33,11 @@ export default function NearbyPlayers() {
   }, [sport, availability, playerCount, requiredSelection, navigate]);
 
   const skillColor = { Beginner: 'chip-green', Intermediate: 'chip-amber', Advanced: 'chip-purple' };
+  const qualityCopy = {
+    best: 'Best match',
+    nearby: 'Farther away',
+    alternate_time: 'Different time'
+  };
 
   const initials = name => name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '??';
   const avatarBg = ['#E1F5EE','#EEEDFE','#FAEEDA','#FAECE7','#E6F1FB'];
@@ -134,6 +139,11 @@ export default function NearbyPlayers() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <span className={`chip ${skillColor[player.skillLevel] || 'chip-green'}`}>{player.skillLevel}</span>
+                  {player.matchQuality && (
+                    <span className={player.matchQuality === 'best' ? 'chip chip-green' : 'chip chip-purple'}>
+                      {qualityCopy[player.matchQuality] || 'Nearby'}
+                    </span>
+                  )}
                   {player.sports?.slice(0, 2).map(s => (
                     <span key={s} className="chip chip-amber">{s}</span>
                   ))}
