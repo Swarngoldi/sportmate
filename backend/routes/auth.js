@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const https = require('https');
 const User = require('../models/User');
+const { normalizeEmail, validateEmailForSignup } = require('../utils/emailValidation');
 const {
   enqueueWelcomeEmail,
   enqueuePasswordResetEmail,
@@ -11,7 +12,7 @@ const {
 } = require('../services/notificationQueue');
 
 const makeToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+const frontendUrl = () => (process.env.FRONTEND_URL || 'http://localhost:5173/index.html').replace(/\/$/, '');
 const forgotPasswordAttempts = new Map();
 const FORGOT_PASSWORD_WINDOW_MS = 15 * 60 * 1000;
 const FORGOT_PASSWORD_MAX_ATTEMPTS = 5;
@@ -86,11 +87,17 @@ router.post('/register', async (req, res) => {
     if (!name || !email || !password || !address) {
       return res.status(400).json({ message: 'Name, email, password and address are required' });
     }
-    const exists = await User.findOne({ email });
+
+    const emailCheck = await validateEmailForSignup(email);
+    if (!emailCheck.valid) {
+      return res.status(400).json({ message: emailCheck.message });
+    }
+
+    const exists = await User.findOne({ email: emailCheck.email });
     if (exists) return res.status(400).json({ message: 'Email already registered' });
 
     const user = await User.create({
-      name, email, password,
+      name, email: emailCheck.email, password,
       location: { address, lat, lng },
       sports: sports || [],
       preferredMatchType: preferredMatchType || 'Singles',
@@ -115,7 +122,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizeEmail(email) });
     if (!user || !(await user.comparePassword(password))) {
       return res.status(400).json({ message: 'Invalid email or password' });
     }
@@ -182,7 +189,7 @@ router.post('/google', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    const normalizedEmail = String(email || '').toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
     const rateLimitKey = `${req.ip}:${normalizedEmail}`;
 
     if (!checkForgotPasswordRateLimit(rateLimitKey)) {
@@ -198,7 +205,7 @@ router.post('/forgot-password', async (req, res) => {
       user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
       await user.save();
 
-      const resetUrl = `${frontendUrl()}/reset-password/${rawToken}?email=${encodeURIComponent(user.email)}`;
+      const resetUrl = `${frontendUrl()}#/reset-password/${rawToken}?email=${encodeURIComponent(user.email)}`;
       await enqueuePasswordResetEmail(user._id, tokenHash, resetUrl);
       await processDueJobs();
     }

@@ -3,26 +3,23 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import NavBar from '../components/NavBar';
 
-export default function ConfirmMatch() {
+export default function ConfirmMatchClean() {
   const navigate = useNavigate();
   const { state } = useLocation();
   const { sport, playerCount, availability, selectedPlayers, court } = state || {};
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const SPORT_EMOJIS = { Badminton:'🏸', Pickleball:'🥒', Basketball:'🏀', Football:'⚽', Tennis:'🎾', Cricket:'🏏', 'Table Tennis':'🏓', Volleyball:'🏐' };
-
   useEffect(() => {
-    if (!sport || !court) {
-      navigate('/');
-    }
-    if (playerCount > 0 && !selectedPlayers?.length) {
-      navigate('/');
-    }
+    if (!sport || !court) navigate('/');
+    if (playerCount > 0 && !selectedPlayers?.length) navigate('/');
   }, [sport, selectedPlayers, court, navigate, playerCount]);
 
+  const courtPhone = court?.phone || court?.formatted_phone_number || court?.international_phone_number || '';
+
   const confirmMatch = async () => {
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
     try {
       const payload = {
         sport,
@@ -40,7 +37,7 @@ export default function ConfirmMatch() {
           location: court?.location,
           rating: court?.rating,
           pricePerHour: court?.pricePerHour,
-          phone: court?.phone || court?.formatted_phone_number || court?.international_phone_number || ''
+          phone: courtPhone
         };
       }
 
@@ -48,9 +45,7 @@ export default function ConfirmMatch() {
       if (res.data.status === 'confirmed') {
         navigate(`/chat/${res.data._id}`, { state: { match: res.data, players: selectedPlayers || [], court } });
       } else {
-        navigate('/matches', {
-          state: { notice: 'Request sent. Chat will open after the player accepts.' }
-        });
+        navigate('/matches', { state: { notice: 'Request sent. Chat will open after the player accepts.' } });
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create match');
@@ -60,20 +55,21 @@ export default function ConfirmMatch() {
   };
 
   const rows = [
-    { icon: SPORT_EMOJIS[sport] || '🏅', key: 'Sport', val: playerCount === 0 ? `${sport} · Solo` : `${sport} · ${playerCount + 1} total` },
-    playerCount === 0 
-      ? null 
-      : { icon: '👥', key: 'Players', val: selectedPlayers?.map((player) => `${player.name}${player.email ? ` (${player.email})` : ''}`).join(', ') || '—' },
-    { icon: '📍', key: 'Court', val: court?.name ? `${court.name}, ${court.address}` : '—' },
-    { icon: '🕐', key: 'When', val: availability === 'Now' ? 'Today, as soon as possible' : availability === 'Evening' ? 'Today evening' : 'This weekend' },
-    { icon: '💰', key: 'Court fee', val: court?.pricePerHour ? playerCount === 0 ? `₹${court.pricePerHour}/hr` : `₹${court.pricePerHour}/hr · split across ${playerCount + 1}` : 'Free / TBD' }
+    { tag: 'Sport', key: 'Sport', val: playerCount === 0 ? `${sport} - Solo` : `${sport} - ${playerCount + 1} total` },
+    playerCount === 0
+      ? null
+      : { tag: 'Players', key: 'Players', val: selectedPlayers?.map((player) => `${player.name}${player.email ? ` (${player.email})` : ''}`).join(', ') || '-' },
+    { tag: 'Court', key: 'Court', val: court?.name ? `${court.name}, ${court.address}` : '-' },
+    { tag: 'Phone', key: 'Court contact', val: courtPhone || 'Ask/confirm at court' },
+    { tag: 'Time', key: 'When', val: availability === 'Now' ? 'Today, as soon as possible' : availability === 'Evening' ? 'Today evening' : 'This weekend' },
+    { tag: 'Check', key: 'Booking', val: 'Confirm at court' }
   ].filter(Boolean);
 
   return (
     <div className="app-shell">
       <div style={{ background: 'var(--green)', color: '#fff', padding: '20px 16px 24px', textAlign: 'center', flexShrink: 0 }}>
-        <button className="back-btn" onClick={() => navigate(-1)} style={{ justifyContent: 'flex-start', width: '100%', marginBottom: 12 }}>← Back</button>
-        <div style={{ fontSize: 48 }}>🎉</div>
+        <button className="back-btn" onClick={() => navigate(-1)} style={{ justifyContent: 'flex-start', width: '100%', marginBottom: 12 }}>Back</button>
+        <div style={{ fontFamily: 'Syne,sans-serif', fontSize: 34, fontWeight: 800 }}>OK</div>
         <h1 style={{ fontSize: 22, fontWeight: 800, marginTop: 8 }}>Almost there!</h1>
         <p style={{ opacity: 0.85, fontSize: 13, marginTop: 4 }}>Review your match details below</p>
       </div>
@@ -87,31 +83,37 @@ export default function ConfirmMatch() {
 
         <div style={{ background: 'var(--bg2)', borderRadius: 16, padding: '4px 14px', marginBottom: 16 }}>
           {rows.map(row => (
-            <div key={row.key} style={{
-              display: 'flex', gap: 12, alignItems: 'center',
-              padding: '12px 0', borderBottom: '1px solid var(--border)'
-            }}>
+            <div key={row.key} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
               <div style={{
-                width: 34, height: 34, borderRadius: 10, background: 'var(--green-light)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0
-              }}>{row.icon}</div>
-              <div>
+                width: 46,
+                minWidth: 46,
+                height: 34,
+                borderRadius: 10,
+                background: 'var(--green-light)',
+                color: 'var(--green-dark)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 800
+              }}>{row.tag}</div>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: 'var(--text2)' }}>{row.key}</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 1 }}>{row.val}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 1, overflowWrap: 'anywhere' }}>{row.val}</div>
               </div>
             </div>
           ))}
         </div>
 
         <div style={{ background: 'var(--amber-light)', borderRadius: 12, padding: '12px 14px', marginBottom: 20, fontSize: 12, color: '#633806', lineHeight: 1.6 }}>
-          ⚡ {playerCount === 0 
-            ? 'Confirming will book your solo match and create a record.'
-            : 'Confirming will create a private chat for your selected group and notify everyone.'
+          {playerCount === 0
+            ? 'Confirming will create your solo match record. Please call or confirm availability directly at the court.'
+            : 'Confirming will create a private chat and notify selected players. Court availability should be confirmed directly at the venue.'
           }
         </div>
 
         <button className="btn btn-primary" onClick={confirmMatch} disabled={loading}>
-          {loading ? 'Confirming...' : playerCount === 0 ? `Confirm solo match →` : `Confirm match with ${selectedPlayers?.length || 0} players →`}
+          {loading ? 'Confirming...' : playerCount === 0 ? 'Confirm solo match' : `Confirm match with ${selectedPlayers?.length || 0} players`}
         </button>
         <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={() => navigate('/')}>
           Cancel

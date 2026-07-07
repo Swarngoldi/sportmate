@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -20,18 +20,99 @@ export default function MyMatches() {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState(state?.notice || '');
+  const [error, setError] = useState('');
+  const [actionId, setActionId] = useState('');
 
-  useEffect(() => {
-    api.get('/matches').then(res => setMatches(res.data)).catch(() => {}).finally(() => setLoading(false));
+  const loadMatches = useCallback(async () => {
+    setError('');
+    try {
+      const res = await api.get('/matches');
+      setMatches(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not load matches');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const opponent = (match) => match.players?.find(p => p._id !== user?._id);
+  useEffect(() => {
+    loadMatches();
+  }, [loadMatches]);
+
+  useEffect(() => {
+    const refresh = () => loadMatches();
+    window.addEventListener('sportmate:notification-new', refresh);
+    window.addEventListener('sportmate:notifications-refresh', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('sportmate:notification-new', refresh);
+      window.removeEventListener('sportmate:notifications-refresh', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [loadMatches]);
+
+  const opponent = (match) => match.players?.find(p => String(p._id) !== String(user?._id));
+  const initiatorId = (match) => String(match.initiator?._id || match.initiator || '');
+  const isIncomingPending = (match) => match.status === 'pending' && initiatorId(match) !== String(user?._id);
+
   const openMatch = (match, opp) => {
     if (match.status !== 'confirmed') {
-      setNotice('Chat opens after this match is confirmed.');
+      setNotice(isIncomingPending(match) ? 'This request needs your response before chat opens.' : 'Chat opens after this match is confirmed.');
       return;
     }
     navigate(`/chat/${match._id}`, { state: { match, opponent: opp, court: match.court } });
+  };
+
+  const actOnMatch = async (event, match, action) => {
+    event.stopPropagation();
+    if (actionId) return;
+
+    setActionId(match._id);
+    setError('');
+    setNotice('');
+
+    try {
+      const res = await api.put(`/matches/${match._id}/${action}`);
+      setMatches(prev => prev.map(item => item._id === match._id ? res.data : item));
+      window.dispatchEvent(new Event('sportmate:notifications-refresh'));
+
+      if (action === 'accept') {
+        navigate(`/chat/${res.data._id}`, { state: { match: res.data, opponent: opponent(res.data), court: res.data.court } });
+      } else {
+        setNotice('Request declined.');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || `Could not ${action} request`);
+    } finally {
+      setActionId('');
+    }
+  };
+
+  const clearMatch = async (event, match) => {
+    event.stopPropagation();
+    if (actionId) return;
+
+    const pending = match.status === 'pending';
+    const message = pending
+      ? 'Clear this pending match? This will decline or cancel the request.'
+      : 'Clear this match from your dashboard?';
+
+    if (!window.confirm(message)) return;
+
+    setActionId(match._id);
+    setError('');
+    setNotice('');
+
+    try {
+      const res = await api.delete(`/matches/${match._id}`);
+      setMatches(prev => prev.filter(item => item._id !== match._id));
+      window.dispatchEvent(new Event('sportmate:notifications-refresh'));
+      setNotice(res.data?.declined ? 'Request declined and cleared.' : 'Match cleared from your dashboard.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not clear match');
+    } finally {
+      setActionId('');
+    }
   };
 
   return (
@@ -45,6 +126,12 @@ export default function MyMatches() {
         {notice && (
           <div style={{ background: 'var(--green-light)', color: 'var(--green-dark)', padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13 }}>
             {notice}
+          </div>
+        )}
+
+        {error && (
+          <div style={{ background: '#FCEBEB', color: '#A32D2D', padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13 }}>
+            {error}
           </div>
         )}
 
@@ -62,23 +149,34 @@ export default function MyMatches() {
         {matches.map(match => {
           const opp = opponent(match);
           const status = STATUS_COLORS[match.status] || STATUS_COLORS.pending;
+          const incoming = isIncomingPending(match);
+          const busy = actionId === match._id;
           return (
             <div
               key={match._id}
               onClick={() => openMatch(match, opp)}
               style={{
-                background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 16,
+                background: incoming ? 'var(--green-light)' : 'var(--bg)',
+                border: incoming ? '2px solid var(--green)' : '1px solid var(--border)',
+                borderRadius: 16,
                 padding: 14, marginBottom: 10, cursor: 'pointer', transition: '0.15s'
               }}
               onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--green)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = incoming ? 'var(--green)' : 'var(--border)'}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <span style={{ fontSize: 28 }}>{SPORT_EMOJIS[match.sport] || '🏅'}</span>
                   <div>
                     <div style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15 }}>{match.sport} · {match.matchType}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>vs {opp?.name || 'Opponent'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                      {incoming ? 'Request from' : 'With'} {opp?.name || 'Opponent'}
+                    </div>
+                    {opp?.email && (
+                      <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {opp.email}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <span style={{ background: status.bg, color: status.color, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
@@ -94,10 +192,38 @@ export default function MyMatches() {
                 {new Date(match.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </div>
               {match.status !== 'confirmed' && (
-                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text2)' }}>
-                  Waiting for confirmation before chat opens.
+                <div style={{ marginTop: 8, fontSize: 12, color: incoming ? 'var(--green-dark)' : 'var(--text2)', fontWeight: incoming ? 700 : 500 }}>
+                  {incoming ? 'This player is waiting for your response.' : 'Waiting for confirmation before chat opens.'}
                 </div>
               )}
+              {incoming && (
+                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={busy}
+                    onClick={(event) => actOnMatch(event, match, 'decline')}
+                  >
+                    Decline
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={busy}
+                    onClick={(event) => actOnMatch(event, match, 'accept')}
+                  >
+                    {busy ? 'Saving...' : 'Accept'}
+                  </button>
+                </div>
+              )}
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ marginTop: 10, width: '100%' }}
+                disabled={busy}
+                onClick={(event) => clearMatch(event, match)}
+              >
+                Clear from my matches
+              </button>
             </div>
           );
         })}

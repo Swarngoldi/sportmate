@@ -22,6 +22,10 @@ export function connectRealtime(token) {
     window.dispatchEvent(new CustomEvent('sportmate:notifications-count', { detail: payload }));
   });
 
+  socket.on('notification-job:update', (payload) => {
+    window.dispatchEvent(new CustomEvent('sportmate:notification-job-update', { detail: payload }));
+  });
+
   socket.on('connect_error', () => {
     window.dispatchEvent(new Event('sportmate:realtime-offline'));
   });

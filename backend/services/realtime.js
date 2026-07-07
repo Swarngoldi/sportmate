@@ -76,8 +76,30 @@ const emitNotification = async (notificationId) => {
   await emitUnreadCount(notification.recipient);
 };
 
+const emitNotificationJobUpdate = async (job) => {
+  if (!io || !job?.recipient) return;
+
+  emitToUser(job.recipient, 'notification-job:update', {
+    job: {
+      _id: job._id,
+      channel: job.channel,
+      type: job.type,
+      status: job.status,
+      attempts: job.attempts,
+      maxAttempts: job.maxAttempts,
+      nextAttemptAt: job.nextAttemptAt,
+      lastError: job.lastError,
+      deadLetterReason: job.deadLetterReason,
+      deliveredAt: job.deliveredAt,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt
+    }
+  });
+};
+
 module.exports = {
   initRealtime,
   emitUnreadCount,
-  emitNotification
+  emitNotification,
+  emitNotificationJobUpdate
 };

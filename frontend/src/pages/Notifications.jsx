@@ -47,8 +47,11 @@ export default function Notifications() {
     try {
       const res = await api.get('/notifications');
       setNotifications(res.data);
-      await api.put('/notifications/mark-all-read');
-      window.dispatchEvent(new Event('sportmate:notifications-refresh'));
+      if (res.data.some(notification => !notification.read)) {
+        await api.put('/notifications/mark-all-read');
+        setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+        window.dispatchEvent(new Event('sportmate:notifications-refresh'));
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Could not load notifications');
     } finally {
@@ -66,8 +69,11 @@ export default function Notifications() {
       if (!notification?._id) return;
       setNotifications(prev => {
         if (prev.some(item => item._id === notification._id)) return prev;
-        return [notification, ...prev];
+        return [{ ...notification, read: true }, ...prev];
       });
+      api.put(`/notifications/${notification._id}/read`)
+        .then(() => window.dispatchEvent(new Event('sportmate:notifications-refresh')))
+        .catch(() => {});
       setLoading(false);
     };
 
@@ -136,8 +142,30 @@ export default function Notifications() {
     <div className="app-shell">
       <div className="page-header">
         <button className="back-btn" onClick={() => navigate(-1)}>← Back</button>
-        <h1>Notifications</h1>
-        <p>Match requests, accepts and booking updates</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+          <div>
+            <h1>Notifications</h1>
+            <p>Match requests, accepts and booking updates</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/notification-dashboard')}
+            style={{
+              border: '1px solid rgba(255,255,255,0.35)',
+              background: 'rgba(255,255,255,0.14)',
+              color: '#fff',
+              borderRadius: 10,
+              padding: '8px 10px',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+              fontFamily: 'DM Sans, sans-serif',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Health
+          </button>
+        </div>
       </div>
 
       <div className="scroll-content">

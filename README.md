@@ -309,14 +309,14 @@ Backend `.env` values for the new features:
 MONGO_URI=mongodb://localhost:27017/sportmate
 JWT_SECRET=your_super_secret_jwt_key_here
 PORT=5000
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5173/index.html
 GOOGLE_CLIENT_ID=your_google_oauth_client_id.apps.googleusercontent.com
-SMTP_HOST=smtp.example.com
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=your_smtp_user
-SMTP_PASS=your_smtp_password
-MAIL_FROM=SportMate <no-reply@sportmate.com>
+SMTP_USER=your_app_sender_gmail@gmail.com
+SMTP_PASS=your_16_character_gmail_app_password
+MAIL_FROM=SportMate <your_app_sender_gmail@gmail.com>
 NOTIFICATION_WORKER_INTERVAL_MS=5000
 CORS_ORIGIN=http://localhost:5173
 
@@ -338,7 +338,11 @@ Notifications use Socket.IO for realtime browser delivery. The browser opens an 
 
 Notification jobs are still saved in MongoDB for durability and idempotency. For local development without Redis, the app runs a Mongo-backed worker fallback. For production scale, set `REDIS_URL`; BullMQ will process notification jobs with configurable concurrency while MongoDB remains the source of truth for delivery state, retries, and dead-letter records.
 
-Forgot-password emails require SMTP settings. Reset links are never returned to the browser; they are only sent to the account owner's email address. In local development without SMTP, the backend logs email dry-runs to the server console, but real users need SMTP configured.
+Forgot-password emails require SMTP settings for the app's sender mailbox. This sender can be one dedicated SportMate Gmail account or a production email provider account. Users do not provide SMTP credentials. Reset links are never returned to the browser; they are only sent to the account owner's registered email address. In local development the reset link uses `index.html#/reset-password/...` so it opens correctly from email even when the dev server cannot serve direct route URLs.
+
+Local email signup validates email format and checks that the email domain can receive mail before creating the account. Google signup additionally requires Google's verified email signal. Match request emails, welcome emails, and forgot-password emails all use the same durable notification queue.
+
+Users can clear matches from My Matches. Clearing a pending incoming request declines it; clearing a pending outgoing request cancels it; clearing a closed match only hides it from that user's dashboard.
 
 ---
 
@@ -358,6 +362,7 @@ Forgot-password emails require SMTP settings. Reset links are never returned to 
 | POST | /api/matches | Create a match |
 | GET | /api/matches | My matches |
 | GET | /api/matches/:id | Single match |
+| DELETE | /api/matches/:id | Clear match; pending requests are declined/cancelled |
 | PUT | /api/matches/:id/confirm | Confirm match |
 | GET | /api/notifications | My in-app notifications |
 | GET | /api/notifications/delivery-status | My recent notification delivery jobs |

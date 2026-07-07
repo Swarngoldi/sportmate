@@ -40,10 +40,9 @@ router.get('/nearby', auth, async (req, res) => {
 
     const filter = {
       _id: { $ne: req.user._id },
-      'location.lat': { $exists: true },
-      'location.lng': { $exists: true }
+      'location.lat': { $exists: true, $ne: null },
+      'location.lng': { $exists: true, $ne: null }
     };
-    if (sport) filter.sports = sport;
     if (matchType) filter.preferredMatchType = matchType;
 
     const users = await User.find(filter).select('-password');
@@ -52,10 +51,13 @@ router.get('/nearby', auth, async (req, res) => {
       .map(u => {
         const dist = User.getDistance(myLat, myLng, u.location.lat, u.location.lng);
         const exactAvailability = !availability || u.availability === availability;
+        const sportMatch = sport ? (u.sports || []).includes(sport) : true;
         return {
           ...u.toObject(),
           distance: Math.round(dist * 10) / 10,
           exactAvailability,
+          sportMatch,
+          sportFit: sportMatch ? 'selected_sport' : 'other_interest',
           matchQuality: exactAvailability && dist <= 10
             ? 'best'
             : exactAvailability
@@ -66,7 +68,9 @@ router.get('/nearby', auth, async (req, res) => {
       .filter(u => u.distance <= 50)
       .sort((a, b) => {
         const qualityOrder = { best: 0, nearby: 1, alternate_time: 2 };
-        return qualityOrder[a.matchQuality] - qualityOrder[b.matchQuality] || a.distance - b.distance;
+        return Number(b.sportMatch) - Number(a.sportMatch)
+          || qualityOrder[a.matchQuality] - qualityOrder[b.matchQuality]
+          || a.distance - b.distance;
       });
 
     const exactNearby = withDistance.filter(u => u.matchQuality === 'best');

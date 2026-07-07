@@ -2,7 +2,7 @@ const Notification = require('../models/Notification');
 const NotificationJob = require('../models/NotificationJob');
 const Match = require('../models/Match');
 const User = require('../models/User');
-const { emitNotification } = require('./realtime');
+const { emitNotification, emitNotificationJobUpdate } = require('./realtime');
 const {
   sendWelcomeEmail,
   sendPasswordResetEmail,
@@ -24,6 +24,7 @@ try {
 
 const MATCH_TYPES = ['match_request', 'match_accepted', 'match_declined', 'match_cancelled'];
 const BASE_RETRY_DELAY_MS = 1000;
+const STALE_PROCESSING_MS = Number(process.env.NOTIFICATION_STALE_PROCESSING_MS || 2 * 60 * 1000);
 const QUEUE_NAME = process.env.NOTIFICATION_QUEUE_NAME || 'sportmate-notifications';
 const useBullQueue = () => Boolean(process.env.REDIS_URL && BullQueue && BullWorker && IORedis);
 let bullConnection;
@@ -97,6 +98,10 @@ const makeJob = async ({ idempotencyKey, channel, type, recipient, sender, match
 
   if (queueMode === 'bullmq' && ['queued', 'retrying'].includes(job.status)) {
     await enqueueBullJob(job);
+  }
+
+  if (job.status === 'queued') {
+    await emitNotificationJobUpdate(job);
   }
 
   return job;
@@ -181,7 +186,7 @@ const deliverInApp = async (job) => {
 const deliverEmail = async (job) => {
   const recipient = await User.findById(job.recipient);
   if (!recipient) throw new Error('Recipient not found');
-  if (recipient.notificationPreferences?.email === false) return;
+  if (job.type !== 'password_reset' && recipient.notificationPreferences?.email === false) return;
 
   if (job.type === 'welcome_email') {
     await sendWelcomeEmail(recipient);
@@ -219,6 +224,7 @@ const processJob = async (job) => {
   job.status = 'processing';
   job.lockedAt = new Date();
   await job.save();
+  await emitNotificationJobUpdate(job);
 
   try {
     await deliverJob(job);
@@ -226,6 +232,7 @@ const processJob = async (job) => {
     job.deliveredAt = new Date();
     job.lastError = '';
     await job.save();
+    await emitNotificationJobUpdate(job);
   } catch (err) {
     job.attempts += 1;
     job.lastError = err.message;
@@ -240,6 +247,7 @@ const processJob = async (job) => {
     }
 
     await job.save();
+    await emitNotificationJobUpdate(job);
 
     if (queueMode === 'bullmq' && job.status === 'retrying') {
       await enqueueBullJob(job);
@@ -255,21 +263,87 @@ const processJobByKey = async (idempotencyKey) => {
   return processJob(job);
 };
 
+const recoverStaleProcessingJobs = async () => {
+  const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS);
+  const staleJobs = await NotificationJob.find({
+    status: 'processing',
+    lockedAt: { $lte: staleBefore }
+  }).limit(50);
+
+  for (const job of staleJobs) {
+    job.attempts += 1;
+    job.lockedAt = undefined;
+    job.lastError = 'Worker stopped while processing this job';
+
+    if (job.attempts >= job.maxAttempts) {
+      job.status = 'dead';
+      job.deadLetterReason = job.lastError;
+    } else {
+      job.status = 'retrying';
+      job.nextAttemptAt = new Date(Date.now() + delayForAttempt(job.attempts));
+    }
+
+    await job.save();
+    await emitNotificationJobUpdate(job);
+
+    if (queueMode === 'bullmq' && job.status === 'retrying') {
+      await enqueueBullJob(job);
+    }
+  }
+
+  return staleJobs.length;
+};
+
 const processDueJobs = async ({ limit = 25 } = {}) => {
   if (queueMode === 'bullmq') return 0;
 
-  const jobs = await NotificationJob.find({
+  await recoverStaleProcessingJobs();
+
+  const baseFilter = {
     status: { $in: ['queued', 'retrying'] },
     nextAttemptAt: { $lte: new Date() }
-  })
+  };
+
+  const inAppLimit = Math.ceil(limit * 0.7);
+  const inAppJobs = await NotificationJob.find({ ...baseFilter, channel: 'in_app' })
     .sort({ createdAt: 1 })
-    .limit(limit);
+    .limit(inAppLimit);
+
+  const remaining = Math.max(0, limit - inAppJobs.length);
+  const emailJobs = remaining
+    ? await NotificationJob.find({ ...baseFilter, channel: 'email' })
+      .sort({ createdAt: 1 })
+      .limit(remaining)
+    : [];
+
+  const jobs = [...inAppJobs, ...emailJobs];
 
   for (const job of jobs) {
     await processJob(job);
   }
 
   return jobs.length;
+};
+
+const retryNotificationJob = async ({ jobId, recipient }) => {
+  const job = await NotificationJob.findOne({ _id: jobId, recipient });
+  if (!job) return null;
+  if (!['dead', 'retrying'].includes(job.status)) return job;
+
+  job.status = 'queued';
+  job.attempts = 0;
+  job.nextAttemptAt = new Date();
+  job.lastError = '';
+  job.deadLetterReason = '';
+  job.lockedAt = undefined;
+  await job.save();
+  await emitNotificationJobUpdate(job);
+
+  if (queueMode === 'bullmq') {
+    await enqueueBullJob(job);
+  }
+
+  return job;
 };
 
 const startNotificationWorker = () => {
@@ -313,5 +387,6 @@ module.exports = {
   enqueuePasswordResetEmail,
   enqueueMatchNotifications,
   processDueJobs,
+  retryNotificationJob,
   startNotificationWorker
 };

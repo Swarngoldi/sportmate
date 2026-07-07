@@ -5,9 +5,11 @@ const Match = require('../models/Match');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { enqueueMatchNotifications, processDueJobs } = require('../services/notificationQueue');
+const { emitUnreadCount } = require('../services/realtime');
 
 const populateMatchForResponse = (match) => match.populate([
-  { path: 'players', select: 'name location sports skillLevel' },
+  { path: 'players', select: 'name email location sports skillLevel' },
+  { path: 'initiator', select: 'name email' },
   { path: 'court' }
 ]);
 
@@ -88,8 +90,9 @@ router.post('/', auth, async (req, res) => {
 // GET /api/matches - my matches
 router.get('/', auth, async (req, res) => {
   try {
-    const matches = await Match.find({ players: req.user._id })
-      .populate('players', 'name location sports skillLevel')
+    const matches = await Match.find({ players: req.user._id, hiddenFor: { $ne: req.user._id } })
+      .populate('players', 'name email location sports skillLevel')
+      .populate('initiator', 'name email')
       .populate('court')
       .sort({ createdAt: -1 });
     res.json(matches);
@@ -102,7 +105,8 @@ router.get('/', auth, async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
-      .populate('players', 'name location sports skillLevel trustScore')
+      .populate('players', 'name email location sports skillLevel trustScore')
+      .populate('initiator', 'name email')
       .populate('court');
     if (!match) return res.status(404).json({ message: 'Match not found' });
     if (!match.players.some(p => String(p._id) === String(req.user._id))) {
@@ -130,6 +134,7 @@ router.put('/:id/accept', auth, async (req, res) => {
         { recipient: req.user._id, match: match._id, type: 'match_request' },
         { read: true }
       );
+      await emitUnreadCount(req.user._id);
       await populateMatchForResponse(match);
       return res.json(match);
     }
@@ -144,6 +149,7 @@ router.put('/:id/accept', auth, async (req, res) => {
       { recipient: req.user._id, match: match._id, type: 'match_request' },
       { read: true }
     );
+    await emitUnreadCount(req.user._id);
 
     await enqueueMatchNotifications({
       type: 'match_accepted',
@@ -182,6 +188,7 @@ router.put('/:id/decline', auth, async (req, res) => {
       { recipient: req.user._id, match: match._id, type: 'match_request' },
       { read: true }
     );
+    await emitUnreadCount(req.user._id);
 
     await enqueueMatchNotifications({
       type: 'match_declined',
@@ -221,6 +228,74 @@ router.put('/:id/confirm', auth, async (req, res) => {
 
     await populateMatchForResponse(match);
     res.json(match);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/matches/:id - clear a match from my dashboard.
+// Pending requests become declined/cancelled. Closed matches are hidden only for the current user.
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ message: 'Match not found' });
+
+    const isPlayer = match.players.some(p => String(p) === String(req.user._id));
+    if (!isPlayer) return res.status(403).json({ message: 'Access denied' });
+
+    const isInitiator = String(match.initiator) === String(req.user._id);
+    const wasPending = match.status === 'pending';
+
+    if (wasPending) {
+      match.status = 'cancelled';
+
+      await Notification.updateMany(
+        { recipient: req.user._id, match: match._id, type: 'match_request' },
+        { read: true }
+      );
+      await emitUnreadCount(req.user._id);
+
+      if (isInitiator) {
+        const recipients = match.players
+          .filter((playerId) => String(playerId) !== String(req.user._id))
+          .map((playerId) => playerId);
+
+        if (recipients.length) {
+          await enqueueMatchNotifications({
+            type: 'match_cancelled',
+            recipients,
+            sender: req.user._id,
+            match: match._id
+          });
+        }
+      } else {
+        await enqueueMatchNotifications({
+          type: 'match_declined',
+          recipients: [match.initiator],
+          sender: req.user._id,
+          match: match._id
+        });
+      }
+    }
+
+    if (!match.hiddenFor.some(playerId => String(playerId) === String(req.user._id))) {
+      match.hiddenFor.push(req.user._id);
+    }
+
+    await match.save();
+
+    if (wasPending) {
+      await processDueJobs();
+    }
+
+    await populateMatchForResponse(match);
+    res.json({
+      success: true,
+      declined: wasPending && !isInitiator,
+      cancelled: wasPending && isInitiator,
+      hidden: true,
+      match
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

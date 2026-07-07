@@ -38,6 +38,10 @@ export default function NearbyPlayers() {
     nearby: 'Farther away',
     alternate_time: 'Different time'
   };
+  const sportFitCopy = {
+    selected_sport: `Plays ${sport}`,
+    other_interest: 'Other interests'
+  };
 
   const initials = name => name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '??';
   const avatarBg = ['#E1F5EE','#EEEDFE','#FAEEDA','#FAECE7','#E6F1FB'];
@@ -102,7 +106,7 @@ export default function NearbyPlayers() {
             <span className="emoji">😔</span>
             <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 16 }}>No players found nearby</p>
             <p style={{ fontSize: 13, marginTop: 8, lineHeight: 1.6 }}>
-              No one playing {sport} nearby right now. Try a different availability or invite friends to join!
+              No players were found within your nearby search area. Try another availability or invite friends to join.
             </p>
             <button className="btn btn-outline btn-sm" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>
               Change filters
@@ -137,6 +141,9 @@ export default function NearbyPlayers() {
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {player.location?.address}
                 </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {player.email}
+                </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <span className={`chip ${skillColor[player.skillLevel] || 'chip-green'}`}>{player.skillLevel}</span>
                   {player.matchQuality && (
@@ -144,7 +151,12 @@ export default function NearbyPlayers() {
                       {qualityCopy[player.matchQuality] || 'Nearby'}
                     </span>
                   )}
-                  {player.sports?.slice(0, 2).map(s => (
+                  {player.sportFit && (
+                    <span className={player.sportMatch ? 'chip chip-green' : 'chip chip-coral'}>
+                      {sportFitCopy[player.sportFit] || 'Interests'}
+                    </span>
+                  )}
+                  {(player.sports?.length ? player.sports : ['No sports added']).slice(0, 3).map(s => (
                     <span key={s} className="chip chip-amber">{s}</span>
                   ))}
                 </div>

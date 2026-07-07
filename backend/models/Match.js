@@ -6,6 +6,7 @@ const matchSchema = new mongoose.Schema({
   matchType: { type: String },
   players: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   initiator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  hiddenFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   court: { type: mongoose.Schema.Types.ObjectId, ref: 'Court' },
   scheduledTime: { type: Date, default: Date.now },
   availability: { type: String, enum: ['Now', 'Evening', 'Weekend'], default: 'Now' },

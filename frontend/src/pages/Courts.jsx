@@ -46,6 +46,29 @@ function getDistanceKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function getPlaceDetails(service, placeId) {
+  return new Promise((resolve) => {
+    if (!placeId) {
+      resolve(null);
+      return;
+    }
+
+    service.getDetails(
+      {
+        placeId,
+        fields: ['formatted_phone_number', 'international_phone_number', 'website', 'url']
+      },
+      (place, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+          resolve(place);
+          return;
+        }
+        resolve(null);
+      }
+    );
+  });
+}
+
 function enrichCourtRanking(item, participantCoords, requesterCoord, midpoint) {
   const courtLat = item.location?.lat ?? item.lat;
   const courtLng = item.location?.lng ?? item.lng;
@@ -238,7 +261,7 @@ export default function Courts() {
               location: requesterCoord || googleSearchLocation,
               radius: 12000
             },
-            (results, status) => {
+            async (results, status) => {
               console.log('Places API response:', status, results?.length || 0, 'results');
               if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
                 setPlacesError('No nearby courts were found by Google Places.');
@@ -248,20 +271,26 @@ export default function Courts() {
 
               if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
                 setPlacesError('');
-                const cleanedPlaces = results.slice(0, 8).map((place) => {
+                const cleanedPlaces = (await Promise.all(results.slice(0, 8).map(async (place) => {
                   if (!place.geometry?.location) return null;
+                  const details = await getPlaceDetails(service, place.place_id);
                   const basicPlace = {
                     placeId: place.place_id,
                     name: place.name,
                     address: place.formatted_address || place.vicinity || '',
                     rating: place.rating,
+                    phone: details?.formatted_phone_number || details?.international_phone_number || '',
+                    formatted_phone_number: details?.formatted_phone_number || '',
+                    international_phone_number: details?.international_phone_number || '',
+                    website: details?.website || '',
+                    mapsUrl: details?.url || '',
                     location: {
                       lat: place.geometry.location.lat(),
                       lng: place.geometry.location.lng()
                     }
                   };
                   return enrichCourtRanking(basicPlace, coords, requesterCoord, googleSearchLocation);
-                }).filter(Boolean)
+                }))).filter(Boolean)
                   .sort((a, b) => a.rankingScore - b.rankingScore || a.distanceFromYou - b.distanceFromYou);
                 setPlacesResults(cleanedPlaces);
                 if (cleanedPlaces.length > 0) {
@@ -289,6 +318,7 @@ export default function Courts() {
                       <div style="font-family: Arial, sans-serif; font-size: 14px;">
                         <strong>${place.name}</strong><br />
                         ${place.address}<br />
+                        ${place.phone ? `${place.phone}<br />` : ''}
                         ${place.rating ? `⭐ ${place.rating}` : ''}
                       </div>
                     `);

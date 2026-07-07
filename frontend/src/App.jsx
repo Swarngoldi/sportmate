@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -8,12 +8,14 @@ import Home from './pages/Home';
 import SelectPlayers from './pages/SelectPlayers';
 import NearbyPlayers from './pages/NearbyPlayers';
 import Courts from './pages/Courts';
-import ConfirmMatch from './pages/ConfirmMatch';
+import ConfirmMatch from './pages/ConfirmMatchClean';
 import Chat from './pages/Chat';
 import MyMatches from './pages/MyMatches';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
+import NotificationDashboard from './pages/NotificationDashboard';
 import AppLocationSync from './components/AppLocationSync';
+import NotificationToast from './components/NotificationToast';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -32,8 +34,9 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <HashRouter>
         <AppLocationSync />
+        <NotificationToast />
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
@@ -47,10 +50,11 @@ export default function App() {
           <Route path="/chat/:matchId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/matches" element={<ProtectedRoute><MyMatches /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/notification-dashboard" element={<ProtectedRoute><NotificationDashboard /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 }
