@@ -8,10 +8,7 @@ on:
   pull_request:
     branches: [ "main", "master" ]
 
-env:
-  # github.repository as <account>/<repo>
-  BACKEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/sportmate-backend
-  FRONTEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/sportmate-frontend
+
 
 jobs:
   build-and-push:
@@ -31,11 +28,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Sanitize Docker Hub Username
+        id: sanitize
+        run: |
+          # Strip newlines and carriage returns that might be in the secret
+          CLEAN_USER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr -d '\n\r ')
+          echo "USERNAME=$CLEAN_USER" >> $GITHUB_ENV
+
       - name: Extract Docker metadata for Backend
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.BACKEND_IMAGE_NAME }}
+          images: ${{ env.USERNAME }}/sportmate-backend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
@@ -45,7 +49,7 @@ jobs:
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.FRONTEND_IMAGE_NAME }}
+          images: ${{ env.USERNAME }}/sportmate-frontend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
