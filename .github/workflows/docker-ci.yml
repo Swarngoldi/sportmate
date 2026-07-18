@@ -9,7 +9,9 @@ on:
     branches: [ "main", "master" ]
 
 env:
-  # We will set BACKEND_IMAGE_NAME and FRONTEND_IMAGE_NAME dynamically to strip any accidental whitespace/newlines from the secret.
+  # github.repository as <account>/<repo>
+  BACKEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/sportmate-backend
+  FRONTEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/sportmate-frontend
 
 jobs:
   build-and-push:
@@ -18,12 +20,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Sanitize Docker Hub Username and set Image Names
-        run: |
-          USERNAME=$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr -d '\n\r ')
-          echo "BACKEND_IMAGE_NAME=$USERNAME/sportmate-backend" >> $GITHUB_ENV
-          echo "FRONTEND_IMAGE_NAME=$USERNAME/sportmate-frontend" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
