@@ -57,6 +57,14 @@ jobs:
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
             VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}  
+     
+      - name: Check secrets exist
+        run: |
+              echo "Client ID length: ${#VITE_GOOGLE_CLIENT_ID}"
+              echo "Maps key length: ${#VITE_GOOGLE_MAPS_API_KEY}"
+        env:
+         VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+         VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}      
 
       - name: Build and push Backend image
         uses: docker/build-push-action@v5
