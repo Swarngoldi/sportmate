@@ -2,18 +2,20 @@ name: Build and Publish Docker Images
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches:
+      - main
+      - master
     tags:
       - 'v*.*.*'
   pull_request:
-    branches: [ "main", "master" ]
-
-
+    branches:
+      - main
+      - master
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,9 +31,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Sanitize Docker Hub Username
-        id: sanitize
         run: |
-          # Strip newlines and carriage returns that might be in the secret
           CLEAN_USER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr -d '\n\r ')
           echo "USERNAME=$CLEAN_USER" >> $GITHUB_ENV
 
@@ -54,17 +54,15 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
             type=ref,event=tag
-          build-args: |
-            VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-            VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}  
-     
-      - name: Check secrets exist
+
+      # Optional: verify secrets exist
+      - name: Check frontend secrets
         run: |
-              echo "Client ID length: ${#VITE_GOOGLE_CLIENT_ID}"
-              echo "Maps key length: ${#VITE_GOOGLE_MAPS_API_KEY}"
+          echo "Client ID length: ${#VITE_GOOGLE_CLIENT_ID}"
+          echo "Maps key length: ${#VITE_GOOGLE_MAPS_API_KEY}"
         env:
-         VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-         VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}      
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
 
       - name: Build and push Backend image
         uses: docker/build-push-action@v5
@@ -83,5 +81,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+
+          build-args: |
+            VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+            VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
