@@ -19,7 +19,7 @@ const populateNotification = [
 ];
 
 const getAllowedOrigins = () => {
-  const configured = process.env.CORS_ORIGIN || 'http://localhost:5173';
+  const configured = 'http://localhost';
   return configured.split(',').map((origin) => origin.trim()).filter(Boolean);
 };
 

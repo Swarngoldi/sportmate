@@ -7,23 +7,34 @@ export function connectRealtime(token) {
 
   if (socket?.connected) return socket;
 
-  const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
-  socket = io(socketUrl, {
+  socket = io({
     auth: { token },
     transports: ['websocket', 'polling'],
-    withCredentials: true
+    withCredentials: true,
   });
 
   socket.on('notification:new', (payload) => {
-    window.dispatchEvent(new CustomEvent('sportmate:notification-new', { detail: payload }));
+    window.dispatchEvent(
+      new CustomEvent('sportmate:notification-new', {
+        detail: payload,
+      })
+    );
   });
 
   socket.on('notifications:unread-count', (payload) => {
-    window.dispatchEvent(new CustomEvent('sportmate:notifications-count', { detail: payload }));
+    window.dispatchEvent(
+      new CustomEvent('sportmate:notifications-count', {
+        detail: payload,
+      })
+    );
   });
 
   socket.on('notification-job:update', (payload) => {
-    window.dispatchEvent(new CustomEvent('sportmate:notification-job-update', { detail: payload }));
+    window.dispatchEvent(
+      new CustomEvent('sportmate:notification-job-update', {
+        detail: payload,
+      })
+    );
   });
 
   socket.on('connect_error', () => {
@@ -35,6 +46,7 @@ export function connectRealtime(token) {
 
 export function disconnectRealtime() {
   if (!socket) return;
+
   socket.disconnect();
   socket = null;
 }
