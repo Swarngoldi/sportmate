@@ -6,11 +6,21 @@ on:
       - main
       - master
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
+
   pull_request:
     branches:
       - main
       - master
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GAR_LOCATION: ${{ secrets.GCP_REGION }}
+  REPOSITORY: ${{ secrets.GAR_REPOSITORY }}
 
 jobs:
   build-and-push:
@@ -23,49 +33,52 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log into Docker Hub
+      # Authenticate to Google Cloud (only on push/tag events)
+      - name: Authenticate to Google Cloud
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: google-github-actions/auth@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
 
-      - name: Sanitize Docker Hub Username
+      # Install gcloud CLI
+      - name: Set up Cloud SDK
+        if: github.event_name != 'pull_request'
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Configure Docker to push to Artifact Registry
+      - name: Configure Docker for Artifact Registry
+        if: github.event_name != 'pull_request'
         run: |
-          CLEAN_USER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr -d '\n\r ')
-          echo "USERNAME=$CLEAN_USER" >> $GITHUB_ENV
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev --quiet
 
+      # ---------------- Backend Metadata ----------------
       - name: Extract Docker metadata for Backend
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.USERNAME }}/sportmate-backend
+          images: |
+            ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/sportmate-backend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
             type=ref,event=tag
 
+      # ---------------- Frontend Metadata ----------------
       - name: Extract Docker metadata for Frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.USERNAME }}/sportmate-frontend
+          images: |
+            ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/sportmate-frontend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
             type=ref,event=tag
 
-      # Optional: verify secrets exist
-      - name: Check frontend secrets
-        run: |
-          echo "Client ID length: ${#VITE_GOOGLE_CLIENT_ID}"
-          echo "Maps key length: ${#VITE_GOOGLE_MAPS_API_KEY}"
-        env:
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-
-      - name: Build and push Backend image
-        uses: docker/build-push-action@v5
+      # ---------------- Backend ----------------
+      - name: Build and Push Backend
+        uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: ${{ github.event_name != 'pull_request' }}
@@ -74,17 +87,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
+      # ---------------- Frontend ----------------
+      - name: Build and Push Frontend
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
-
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-            VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-
           cache-from: type=gha
           cache-to: type=gha,mode=max
