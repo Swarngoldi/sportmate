@@ -1,4 +1,4 @@
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+const GOOGLE_MAPS_KEY = "AIzaSyCKLtOdSIEeFLM7o4l4W5GAk-_Z5boAO0s"
 const GOOGLE_SCRIPT_ID = 'google-maps-script';
 
 function loadGoogleMaps() {

@@ -10,12 +10,9 @@ COPY . .
 
 # Build arguments
 ARG VITE_GOOGLE_CLIENT_ID
-ARG VITE_GOOGLE_MAPS_API_KEY
 
 # Make them available to Vite during the build
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
-ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
-
 RUN npm run build
 
 # Stage 2: Serve the application with Nginx

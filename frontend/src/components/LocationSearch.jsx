@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatPlaceLabel, getCurrentLocationWithAddress } from '../utils/location';
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+const GOOGLE_MAPS_KEY = "AIzaSyCKLtOdSIEeFLM7o4l4W5GAk-_Z5boAO0s"
 
 export default function LocationSearch({ value, onChange, onLocationUpdate }) {
   const [input, setInput] = useState(value?.address || '');
@@ -20,8 +20,7 @@ export default function LocationSearch({ value, onChange, onLocationUpdate }) {
   useEffect(() => {
     if (!GOOGLE_MAPS_KEY) return;
 
-    console.log(import.meta.env.VITE_GOOGLE_CLIENT_ID);
-   console.log(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
+  
 
     const createServices = () => {
       if (window.google?.maps?.places) {

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import NavBar from '../components/NavBar';
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+const GOOGLE_MAPS_KEY = "AIzaSyCKLtOdSIEeFLM7o4l4W5GAk-_Z5boAO0s"
 
 function loadGoogleMapsScript(key) {
   return new Promise((resolve, reject) => {
