@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-frontend:v1.0.0
+          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-frontend:main
           
           
           imagePullPolicy: Always
@@ -105,7 +105,7 @@ spec:
     spec:
       containers:
         - name:  backend
-          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-backend:v1.0.0
+          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-backend:main
 
           imagePullPolicy: Always
           ports:
