@@ -102,9 +102,8 @@ spec:
         app: backend
     spec:
       containers:
-        - name:  backend
-          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-backend:main
-
+        - name: backend
+          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-backend:v1.2.1
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
@@ -213,7 +212,6 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-
           - path: /api
             pathType: Prefix
             backend:
@@ -221,7 +219,6 @@ spec:
                 name: backend-service
                 port:
                   number: 5000
-
           - path: /socket.io
             pathType: Prefix
             backend:
@@ -240,15 +237,14 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-
           - path: /api
             pathType: Prefix
             backend:
               service:
                 name: backend-service
                 port:
-                  number: 5000
-
+                  number:
+                    5000
           - path: /socket.io
             pathType: Prefix
             backend:
