@@ -17,8 +17,6 @@ spec:
       containers:
         - name: frontend
           image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-frontend:v1.2.1
-          
-          
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -41,25 +39,23 @@ spec:
               port: 80
             initialDelaySeconds: 15
             periodSeconds: 20
-    
-        
+
 ---
-
- 
-
-
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
 spec:
+  type: ClusterIP
   selector:
     app: frontend
   ports:
     - port: 80
       targetPort: 80
-    
---- 
+
+---
 apiVersion: v1
 kind: Secret
 metadata:
@@ -71,7 +67,8 @@ stringData:
   GOOGLE_CLIENT_ID: "590701785061-4lngqf99nkpduo8g1rppiqecnsangpg1.apps.googleusercontent.com"
   SMTP_USER: "ayushkhairnar06@gmail.com"
   SMTP_PASS: "sgft sftm ehvf rvid"
---- 
+
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -79,14 +76,15 @@ metadata:
 data:
   REDIS_URL: "redis://redis:6379"
   PORT: "5000"
-  NODE_ENV: "development"
+  NODE_ENV: "production"
   FRONTEND_URL: "https://www.plaaymate.com"
   SMTP_HOST: "smtp.gmail.com"
   SMTP_PORT: "587"
   SMTP_SECURE: "false"
   MAIL_FROM: "ayushkhairnar06@gmail.com"
-  EMAIL_DOMAIN_CHECK: "true" 
----  
+  EMAIL_DOMAIN_CHECK: "true"
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,11 +99,11 @@ spec:
   template:
     metadata:
       labels:
-        app:  backend
+        app: backend
     spec:
       containers:
         - name:  backend
-          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-backend:v1.2.1
+          image: asia-south1-docker.pkg.dev/project-e8e2dbb5-cb6b-4e9e-a0b/sre-images/sportmate-backend:main
 
           imagePullPolicy: Always
           ports:
@@ -126,28 +124,31 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port:  5000
+              port: 5000
             initialDelaySeconds: 15
             periodSeconds: 20
-
           envFrom:
             - configMapRef:
                 name: backend-config
             - secretRef:
                 name: backend-secret
---- 
+
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
 spec:
+  type: ClusterIP
   selector:
     app: backend
   ports:
     - port: 5000
       targetPort: 5000
-   
---- 
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -163,12 +164,12 @@ spec:
         app: redis
     spec:
       containers:
-      - name: redis
-        image: redis:7-alpine
-        ports:
-        - containerPort: 6379
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
 
---- 
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -178,38 +179,80 @@ spec:
   selector:
     app: redis
   ports:
-  - port: 6379
-    targetPort: 6379        
---- 
+    - port: 6379
+      targetPort: 6379
+
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: plaaymate-cert
+spec:
+  domains:
+    - plaaymate.com
+    - www.plaaymate.com
+
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: sportmate-ingress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: sportmate-ip
+    networking.gke.io/managed-certificates: plaaymate-cert
 spec:
   ingressClassName: gce
   rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend-service
-            port:
-              number: 80
+    - host: plaaymate.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
 
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 5000
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
 
-      - path: /socket.io
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 5000
+          - path: /socket.io
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
+
+    - host: www.plaaymate.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
+
+          - path: /socket.io
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
