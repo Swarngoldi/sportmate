@@ -50,7 +50,6 @@ export default function App() {
           <Route path="/chat/:matchId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/matches" element={<ProtectedRoute><MyMatches /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-          <Route path="/notification-dashboard" element={<ProtectedRoute><NotificationDashboard /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

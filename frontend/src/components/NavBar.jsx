@@ -26,7 +26,7 @@ export default function NavBar() {
   useEffect(() => {
     fetchUnreadCount();
     const refresh = () => fetchUnreadCount();
-    const countUpdate = (event) => setUnreadCount(event.detail?.count || 0);
+    const countUpdate = (event) => setUnreadCount(typeof event.detail?.count === 'number' ? event.detail.count : 0);
     window.addEventListener('sportmate:notifications-refresh', refresh);
     window.addEventListener('sportmate:notification-new', refresh);
     window.addEventListener('sportmate:notifications-count', countUpdate);
@@ -53,25 +53,30 @@ export default function NavBar() {
         >
           <span className="nav-icon">{tab.icon}</span>
           {tab.path === '/notifications' && unreadCount > 0 && (
-            <span style={{
-              position: 'absolute',
-              top: 7,
-              left: '50%',
-              marginLeft: 6,
-              minWidth: 16,
-              height: 16,
-              padding: '0 4px',
-              borderRadius: 10,
-              background: '#E24B4A',
-              color: '#fff',
-              border: '1.5px solid var(--bg)',
-              fontSize: 10,
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1
-            }}>
+            <span
+              className="nav-notification-badge"
+              style={{
+                position: 'absolute',
+                top: 4,
+                left: '50%',
+                marginLeft: 4,
+                minWidth: 16,
+                height: 16,
+                padding: '0 4px',
+                borderRadius: 10,
+                background: '#E24B4A',
+                color: '#ffffff',
+                border: '1.5px solid var(--bg)',
+                fontSize: 10,
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+                zIndex: 10,
+                boxShadow: '0 2px 6px rgba(226, 75, 74, 0.4)'
+              }}
+            >
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}

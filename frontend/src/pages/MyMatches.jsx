@@ -18,10 +18,20 @@ export default function MyMatches() {
   const navigate = useNavigate();
   const { state } = useLocation();
   const [matches, setMatches] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState(state?.notice || '');
   const [error, setError] = useState('');
   const [actionId, setActionId] = useState('');
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications/unread-count');
+      setUnreadCount(res.data.count || 0);
+    } catch {
+      setUnreadCount(0);
+    }
+  }, []);
 
   const loadMatches = useCallback(async () => {
     setError('');
@@ -37,19 +47,26 @@ export default function MyMatches() {
 
   useEffect(() => {
     loadMatches();
-  }, [loadMatches]);
+    fetchUnreadCount();
+  }, [loadMatches, fetchUnreadCount]);
 
   useEffect(() => {
-    const refresh = () => loadMatches();
+    const refresh = () => {
+      loadMatches();
+      fetchUnreadCount();
+    };
+    const countUpdate = (event) => setUnreadCount(typeof event.detail?.count === 'number' ? event.detail.count : 0);
     window.addEventListener('sportmate:notification-new', refresh);
     window.addEventListener('sportmate:notifications-refresh', refresh);
+    window.addEventListener('sportmate:notifications-count', countUpdate);
     window.addEventListener('focus', refresh);
     return () => {
       window.removeEventListener('sportmate:notification-new', refresh);
       window.removeEventListener('sportmate:notifications-refresh', refresh);
+      window.removeEventListener('sportmate:notifications-count', countUpdate);
       window.removeEventListener('focus', refresh);
     };
-  }, [loadMatches]);
+  }, [loadMatches, fetchUnreadCount]);
 
   const opponent = (match) => match.players?.find(p => String(p._id) !== String(user?._id));
   const initiatorId = (match) => String(match.initiator?._id || match.initiator || '');
@@ -117,9 +134,57 @@ export default function MyMatches() {
 
   return (
     <div className="app-shell">
-      <div className="page-header">
-        <h1>My Matches</h1>
-        <p>{matches.length} total · confirmed matches open chat</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1>My Matches</h1>
+          <p>{matches.length} total · confirmed matches open chat</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/notifications')}
+          aria-label="Open notifications"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            border: 'none',
+            background: 'rgba(255,255,255,0.2)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            cursor: 'pointer',
+            position: 'relative',
+            flexShrink: 0
+          }}
+        >
+          🔔
+          {unreadCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: -2,
+              right: -2,
+              minWidth: 18,
+              height: 18,
+              padding: '0 5px',
+              borderRadius: 10,
+              background: '#E24B4A',
+              color: '#fff',
+              border: '2px solid var(--green)',
+              fontSize: 10,
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+              zIndex: 10,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+            }}>
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="scroll-content">

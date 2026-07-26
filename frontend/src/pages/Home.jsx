@@ -54,7 +54,7 @@ export default function Home() {
 
     fetchUnreadCount();
     const refresh = () => fetchUnreadCount();
-    const countUpdate = (event) => setUnreadCount(event.detail?.count || 0);
+    const countUpdate = (event) => setUnreadCount(typeof event.detail?.count === 'number' ? event.detail.count : 0);
     window.addEventListener('sportmate:notifications-refresh', refresh);
     window.addEventListener('sportmate:notification-new', refresh);
     window.addEventListener('sportmate:notifications-count', countUpdate);
@@ -150,7 +150,9 @@ export default function Home() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  lineHeight: 1
+                  lineHeight: 1,
+                  zIndex: 10,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
                 }}>
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>

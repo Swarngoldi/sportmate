@@ -69,11 +69,84 @@ export default function Profile() {
     setSaving(false);
   };
 
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await api.get('/notifications/unread-count');
+      setUnreadCount(res.data.count || 0);
+    } catch {
+      setUnreadCount(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const refresh = () => fetchUnreadCount();
+    const countUpdate = (event) => setUnreadCount(typeof event.detail?.count === 'number' ? event.detail.count : 0);
+    window.addEventListener('sportmate:notifications-refresh', refresh);
+    window.addEventListener('sportmate:notification-new', refresh);
+    window.addEventListener('sportmate:notifications-count', countUpdate);
+    return () => {
+      window.removeEventListener('sportmate:notifications-refresh', refresh);
+      window.removeEventListener('sportmate:notification-new', refresh);
+      window.removeEventListener('sportmate:notifications-count', countUpdate);
+    };
+  }, []);
+
   const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
     <div className="app-shell">
       <div style={{ background: 'var(--green)', padding: '28px 20px 32px', color: '#fff', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600 }}>My Profile</div>
+          <button
+            type="button"
+            onClick={() => navigate('/notifications')}
+            aria-label="Open notifications"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 18,
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+          >
+            🔔
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                minWidth: 18,
+                height: 18,
+                padding: '0 5px',
+                borderRadius: 10,
+                background: '#E24B4A',
+                color: '#fff',
+                border: '2px solid var(--green)',
+                fontSize: 10,
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+                zIndex: 10,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+              }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',

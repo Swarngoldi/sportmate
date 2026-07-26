@@ -147,24 +147,7 @@ export default function Notifications() {
             <h1>Notifications</h1>
             <p>Match requests, accepts and booking updates</p>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/notification-dashboard')}
-            style={{
-              border: '1px solid rgba(255,255,255,0.35)',
-              background: 'rgba(255,255,255,0.14)',
-              color: '#fff',
-              borderRadius: 10,
-              padding: '8px 10px',
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'DM Sans, sans-serif',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            Health
-          </button>
+          
         </div>
       </div>
 
